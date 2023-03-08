@@ -1,0 +1,13 @@
+{
+  "Author": "NotNite",
+  "Name": "Linkpearl",
+  "Punchline": "An actually updated Mumble positional audio plugin",
+  "Description": "An actually updated Mumble positional audio plugin. Because people still use Mumble... right?\nEnable \"Link to Game and Transmit Position\" and the Link plugin in your Mumble settings.\nMake sure Mumble is open when the plugin loads, or you'll have to re-enable it.",
+  "InternalName": "Linkpearl",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "mumble",
+    "positional",
+    "audio"
+  ]
+}
