@@ -2,6 +2,7 @@
 using System.IO.MemoryMappedFiles;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using Dalamud.Game;
 using Dalamud.Game.ClientState;
@@ -108,7 +109,11 @@ public sealed class Plugin : IDalamudPlugin {
         var context = contextId + "-" + ClientState.TerritoryType;
         var contextBytes = new byte[256];
         var contextBytesWritten = Encoding.UTF8.GetBytes(context, contextBytes);
-
+        
+        var cid = ClientState.LocalContentId.ToString("X8");
+        var hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(cid));
+        var identity = BitConverter.ToString(hash).Replace("-", "").ToLower();
+        
         return new MumbleAvatar {
             UIVersion = 2,
             UITick = this._tickCount,
@@ -116,7 +121,7 @@ public sealed class Plugin : IDalamudPlugin {
             Name = "Linkpearl",
             Description = "An actually updated Mumble positional audio plugin",
 
-            Identity = ClientState.LocalContentId.ToString("X8"),
+            Identity = identity,
             Context = contextBytes,
             ContextLength = (uint)contextBytesWritten,
 
