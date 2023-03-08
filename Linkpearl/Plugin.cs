@@ -92,12 +92,11 @@ public sealed class Plugin : IDalamudPlugin {
         if (camera == null) return null;
 
         var cameraPos = camera->CameraBase.SceneCamera.Object.Position;
-        var cameraRot = camera->CameraBase.SceneCamera.Object.Rotation; // quaternion
+        var cameraMatrix = camera->CameraBase.SceneCamera.ViewMatrix;
 
         // Thanks GitHub Copilot, I'm failing math class
-        var cameraRotMatrix = Matrix4x4.CreateFromQuaternion(cameraRot);
-        var cameraFront = Vector3.Transform(new Vector3(0, 0, -1), cameraRotMatrix);
-        var cameraTop = Vector3.Transform(new Vector3(0, 1, 0), cameraRotMatrix);
+        var cameraFront = new Vector3(cameraMatrix.M31, cameraMatrix.M32, cameraMatrix.M33);
+        var cameraTop = new Vector3(cameraMatrix.M21, cameraMatrix.M22, cameraMatrix.M23);
 
         var contextId = ClientState.LocalPlayer.CurrentWorld.Id.ToString();
         var boundByDuty = Condition[ConditionFlag.BoundByDuty]
