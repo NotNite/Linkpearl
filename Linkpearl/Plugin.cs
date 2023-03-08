@@ -92,17 +92,15 @@ public sealed class Plugin : IDalamudPlugin {
         if (camera == null) return null;
 
         var cameraPos = camera->CameraBase.SceneCamera.Object.Position;
-        var cameraMatrix = camera->CameraBase.SceneCamera.ViewMatrix;
-
-        // Thanks GitHub Copilot, I'm failing math class
-        var cameraFront = new Vector3(cameraMatrix.M31, cameraMatrix.M32, cameraMatrix.M33);
-        var cameraTop = new Vector3(cameraMatrix.M21, cameraMatrix.M22, cameraMatrix.M23);
-
+        var cameraViewMatrix = camera->CameraBase.SceneCamera.ViewMatrix;
+        var cameraFront = new Vector3(cameraViewMatrix.M13, cameraViewMatrix.M23, cameraViewMatrix.M33);
+        var cameraTop = camera->CameraBase.SceneCamera.Vector_1;
+        
         var contextId = ClientState.LocalPlayer.CurrentWorld.Id.ToString();
         var boundByDuty = Condition[ConditionFlag.BoundByDuty]
                           || Condition[ConditionFlag.BoundByDuty56]
                           || Condition[ConditionFlag.BoundByDuty95];
-        
+
         if (boundByDuty) {
             contextId = "duty";
         }
