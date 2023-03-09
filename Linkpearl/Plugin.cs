@@ -92,19 +92,19 @@ public sealed class Plugin : IDalamudPlugin {
         var camera = CameraManager.Instance->GetActiveCamera();
         if (camera == null) return null;
         // gotta cast because it's the CS struct vector3 type
-        var cameraPos = (Vector3) camera->CameraBase.SceneCamera.Object.Position;
+        var cameraPos = (Vector3)camera->CameraBase.SceneCamera.Object.Position;
 
         var cameraViewMatrix = camera->CameraBase.SceneCamera.ViewMatrix;
         var cameraFront = new Vector3(cameraViewMatrix.M13, cameraViewMatrix.M23, cameraViewMatrix.M33);
         var cameraTop = camera->CameraBase.SceneCamera.Vector_1;
-        
+
         // SoundMicpos is a int between 0-100 that determines how close to the player the sound should be heard from
         // (0 = at camera, 100 = at player)
         var soundMicpos = GameConfig.System.TryGetUInt("SoundMicpos", out var m) ? m : 10;
         var diff = avatarPos - cameraPos;
         var unit = diff / 100;
         cameraPos = unit * soundMicpos + cameraPos;
-        
+
         var contextId = ClientState.LocalPlayer.CurrentWorld.Id.ToString();
         var boundByDuty = Condition[ConditionFlag.BoundByDuty]
                           || Condition[ConditionFlag.BoundByDuty56]
@@ -117,11 +117,11 @@ public sealed class Plugin : IDalamudPlugin {
         var context = contextId + "-" + ClientState.TerritoryType;
         var contextBytes = new byte[256];
         var contextBytesWritten = Encoding.UTF8.GetBytes(context, contextBytes);
-        
+
         var cid = ClientState.LocalContentId.ToString("X8");
         var hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(cid));
         var identity = BitConverter.ToString(hash).Replace("-", "").ToLower();
-        
+
         return new MumbleAvatar {
             UIVersion = 2,
             UITick = this._tickCount,
