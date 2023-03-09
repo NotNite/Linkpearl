@@ -29,7 +29,7 @@ public struct MumbleAvatar {
     public float[] CameraTop;
 
     [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
-    public string Identity; 
+    public string Identity;
 
     public uint ContextLength;
 

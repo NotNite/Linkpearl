@@ -96,7 +96,7 @@ public sealed class Plugin : IDalamudPlugin {
         var cameraViewMatrix = camera->CameraBase.SceneCamera.ViewMatrix;
         var cameraFront = new Vector3(cameraViewMatrix.M13, cameraViewMatrix.M23, cameraViewMatrix.M33);
         var cameraTop = camera->CameraBase.SceneCamera.Vector_1;
-        
+
         var contextId = ClientState.LocalPlayer.CurrentWorld.Id.ToString();
         var boundByDuty = Condition[ConditionFlag.BoundByDuty]
                           || Condition[ConditionFlag.BoundByDuty56]
@@ -109,11 +109,11 @@ public sealed class Plugin : IDalamudPlugin {
         var context = contextId + "-" + ClientState.TerritoryType;
         var contextBytes = new byte[256];
         var contextBytesWritten = Encoding.UTF8.GetBytes(context, contextBytes);
-        
+
         var cid = ClientState.LocalContentId.ToString("X8");
         var hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(cid));
         var identity = BitConverter.ToString(hash).Replace("-", "").ToLower();
-        
+
         return new MumbleAvatar {
             UIVersion = 2,
             UITick = this._tickCount,
