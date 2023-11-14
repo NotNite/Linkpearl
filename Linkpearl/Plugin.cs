@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
@@ -15,15 +16,15 @@ using FFXIVClientStructs.FFXIV.Client.Game.Control;
 
 namespace Linkpearl;
 
-public class Dalamud {
-    public static void Initialize(DalamudPluginInterface pluginInterface) => pluginInterface.Create<Dalamud>();
+public class D {
+    public static void Initialize(DalamudPluginInterface pluginInterface) => pluginInterface.Create<D>();
 
     [PluginService, RequiredVersion("1.0")] public static IFramework Framework { get; private set; } = null!;
     [PluginService, RequiredVersion("1.0")] public static IClientState ClientState { get; private set; } = null!;
     [PluginService, RequiredVersion("1.0")] public static IChatGui ChatGui { get; private set; } = null!;
     [PluginService, RequiredVersion("1.0")] public static ICommandManager CommandManager { get; private set; } = null!;
     [PluginService, RequiredVersion("1.0")] public static ICondition Condition { get; private set; } = null!;
-    [PluginService, RequiredVersion("1.0")] public static IPluginLog PluginLog { get; private set; } = null!;
+    [PluginService, RequiredVersion("1.0")] public static IPluginLog Log { get; private set; } = null!;
 }
 
 public sealed class Plugin : IDalamudPlugin {
@@ -41,7 +42,7 @@ public sealed class Plugin : IDalamudPlugin {
     private bool LinuxMode { get; init; }
 
     public Plugin(DalamudPluginInterface pluginInterface) {
-        Dalamud.Initialize(pluginInterface);
+        D.Initialize(pluginInterface);
 
         this.Config = pluginInterface.GetPluginConfig() as Config ?? new Config();
         this.Config.Initialize(pluginInterface);
@@ -52,20 +53,21 @@ public sealed class Plugin : IDalamudPlugin {
         pluginInterface.UiBuilder.Draw += this.DrawUI;
         pluginInterface.UiBuilder.OpenConfigUi += this.DrawConfigUI;
 
+        this.ConfigWindow.IsOpen = true;
+
+        /*
         if (this.LinuxMode) {
-            Dalamud.Framework.Update += this.FrameworkUpdateLinux;
+            LP_Dalamud.Framework.Update += this.FrameworkUpdateLinux;
         } else {
-            Dalamud.Framework.Update += this.FrameworkUpdateWindows;
+            LP_Dalamud.Framework.Update += this.FrameworkUpdateWindows;
         }
 
-        // Dalamud.CommandManager.AddHandler(CommandName, new CommandInfo(this.CommandHandler) {
-        //     HelpMessage = "Debug command for Linkpearl.",
-        //     ShowInHelp = false
-        // });
+        LP_Dalamud.CommandManager.AddHandler(CommandName, new CommandInfo(this.CommandHandler) {
+            HelpMessage = "Debug command for Linkpearl.",
+            ShowInHelp = false
+        });
 
-        Dalamud.ChatGui.Print("LinkPearl Reloaded");
-
-
+        LP_Dalamud.ChatGui.Print("LinkPearl Reloaded");
 
         try {
             if (this.LinuxMode) {
@@ -75,10 +77,22 @@ public sealed class Plugin : IDalamudPlugin {
             }
             this._memoryMappedViewAccessor = this._memoryMappedFile.CreateViewAccessor();
         } catch (Exception e) {
-            Dalamud.PluginLog.Error(e, "Failed to create memory mapped file");
-            Dalamud.ChatGui.PrintError(
+            LP_Dalamud.PluginLog.Error(e, "Failed to create memory mapped file");
+            LP_Dalamud.ChatGui.PrintError(
                 "[Linkpearl] Failed to connect to Mumble. Make sure Mumble is open and re-enable the plugin!");
         }
+        */
+    }
+
+    public void Start() {
+        var test = new TestingArea(rateMS: Config.RateMS);
+
+        D.Framework.Update += test.FrameworkUpdate;
+
+        Task.Factory.StartNew(() => {
+            System.Threading.Thread.Sleep(1000);
+            D.Framework.Update -= test.FrameworkUpdate;
+        });
     }
 
     private void DrawUI() { this.WindowSystem.Draw(); }
@@ -86,15 +100,15 @@ public sealed class Plugin : IDalamudPlugin {
 
     public void Dispose() {
         if (this.LinuxMode) {
-            Dalamud.Framework.Update -= this.FrameworkUpdateLinux;
+            D.Framework.Update -= this.FrameworkUpdateLinux;
         } else {
-            Dalamud.Framework.Update -= this.FrameworkUpdateWindows;
+            D.Framework.Update -= this.FrameworkUpdateWindows;
         }
 
         this.WindowSystem.RemoveAllWindows();
         this.ConfigWindow.Dispose();
 
-        Dalamud.CommandManager.RemoveHandler(CommandName);
+        // D.CommandManager.RemoveHandler(CommandName);
 
         this._memoryMappedViewAccessor?.Dispose();
         this._memoryMappedFile?.Dispose();
@@ -102,34 +116,34 @@ public sealed class Plugin : IDalamudPlugin {
 
     // private void CommandHandler(string cmd, string args) {
     //     var mumbleAvatar = this.BuildAvatarWindows();
-    //     Dalamud.PluginLog.Debug($"Avatar exists: {mumbleAvatar != null}");
+    //     D.Log.Debug($"Avatar exists: {mumbleAvatar != null}");
     //     if (mumbleAvatar == null) return;
 
     //     var avatarPos = mumbleAvatar.Value.AvatarPosition;
-    //     Dalamud.PluginLog.Debug($"Avatar position: {avatarPos[0]}, {avatarPos[1]}, {avatarPos[2]}");
+    //     D.Log.Debug($"Avatar position: {avatarPos[0]}, {avatarPos[1]}, {avatarPos[2]}");
     //     var avatarFront = mumbleAvatar.Value.AvatarFront;
-    //     Dalamud.PluginLog.Debug($"Avatar front: {avatarFront[0]}, {avatarFront[1]}, {avatarFront[2]}");
+    //     D.Log.Debug($"Avatar front: {avatarFront[0]}, {avatarFront[1]}, {avatarFront[2]}");
     //     var avatarTop = mumbleAvatar.Value.AvatarTop;
-    //     Dalamud.PluginLog.Debug($"Avatar top: {avatarTop[0]}, {avatarTop[1]}, {avatarTop[2]}");
+    //     D.Log.Debug($"Avatar top: {avatarTop[0]}, {avatarTop[1]}, {avatarTop[2]}");
 
     //     var cameraPos = mumbleAvatar.Value.CameraPosition;
-    //     Dalamud.PluginLog.Debug($"Camera position: {cameraPos[0]}, {cameraPos[1]}, {cameraPos[2]}");
+    //     D.Log.Debug($"Camera position: {cameraPos[0]}, {cameraPos[1]}, {cameraPos[2]}");
     //     var cameraFront = mumbleAvatar.Value.CameraFront;
-    //     Dalamud.PluginLog.Debug($"Camera front: {cameraFront[0]}, {cameraFront[1]}, {cameraFront[2]}");
+    //     D.Log.Debug($"Camera front: {cameraFront[0]}, {cameraFront[1]}, {cameraFront[2]}");
     //     var cameraTop = mumbleAvatar.Value.CameraTop;
-    //     Dalamud.PluginLog.Debug($"Camera top: {cameraTop[0]}, {cameraTop[1]}, {cameraTop[2]}");
+    //     D.Log.Debug($"Camera top: {cameraTop[0]}, {cameraTop[1]}, {cameraTop[2]}");
 
     //     var context = mumbleAvatar.Value.Context;
-    //     Dalamud.PluginLog.Debug($"Context: {Encoding.UTF8.GetString(context)}");
+    //     D.Log.Debug($"Context: {Encoding.UTF8.GetString(context)}");
     // }
 
     private unsafe MumbleAvatarWindows? BuildAvatarWindows() {
-        if (Dalamud.ClientState.LocalPlayer == null) return null;
+        if (D.ClientState.LocalPlayer == null) return null;
         if (this._memoryMappedFile == null) return null;
         if (this._memoryMappedViewAccessor == null) return null;
 
-        var avatarPos = Dalamud.ClientState.LocalPlayer.Position;
-        var avatarRot = Dalamud.ClientState.LocalPlayer.Rotation; // -pi to pi radians
+        var avatarPos = D.ClientState.LocalPlayer.Position;
+        var avatarRot = D.ClientState.LocalPlayer.Rotation; // -pi to pi radians
         var avatarFront = new Vector3((float)Math.Cos(avatarRot), 0, (float)Math.Sin(avatarRot));
         var avatarTop = new Vector3(0, 1, 0);
 
@@ -141,20 +155,20 @@ public sealed class Plugin : IDalamudPlugin {
         var cameraFront = new Vector3(cameraViewMatrix.M13, cameraViewMatrix.M23, cameraViewMatrix.M33);
         var cameraTop = camera->CameraBase.SceneCamera.Vector_1;
 
-        var contextId = Dalamud.ClientState.LocalPlayer.CurrentWorld.Id.ToString();
-        var boundByDuty = Dalamud.Condition[ConditionFlag.BoundByDuty]
-                          || Dalamud.Condition[ConditionFlag.BoundByDuty56]
-                          || Dalamud.Condition[ConditionFlag.BoundByDuty95];
+        var contextId = D.ClientState.LocalPlayer.CurrentWorld.Id.ToString();
+        var boundByDuty = D.Condition[ConditionFlag.BoundByDuty]
+                          || D.Condition[ConditionFlag.BoundByDuty56]
+                          || D.Condition[ConditionFlag.BoundByDuty95];
 
         if (boundByDuty) {
             contextId = "duty";
         }
 
-        var context = contextId + "-" + Dalamud.ClientState.TerritoryType;
+        var context = contextId + "-" + D.ClientState.TerritoryType;
         var contextBytes = new byte[256];
         var contextBytesWritten = Encoding.UTF8.GetBytes(context, contextBytes);
 
-        var cid = Dalamud.ClientState.LocalContentId.ToString("X8");
+        var cid = D.ClientState.LocalContentId.ToString("X8");
         var hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(cid));
         var identity = BitConverter.ToString(hash).Replace("-", "").ToLower();
 
@@ -208,12 +222,12 @@ public sealed class Plugin : IDalamudPlugin {
     }
 
     private unsafe MumbleAvatarLinux? BuildAvatarLinux() {
-        if (Dalamud.ClientState.LocalPlayer == null) return null;
+        if (D.ClientState.LocalPlayer == null) return null;
         if (this._memoryMappedFile == null) return null;
         if (this._memoryMappedViewAccessor == null) return null;
 
-        var avatarPos = Dalamud.ClientState.LocalPlayer.Position;
-        var avatarRot = Dalamud.ClientState.LocalPlayer.Rotation; // -pi to pi radians
+        var avatarPos = D.ClientState.LocalPlayer.Position;
+        var avatarRot = D.ClientState.LocalPlayer.Rotation; // -pi to pi radians
         var avatarFront = new Vector3((float)Math.Cos(avatarRot), 0, (float)Math.Sin(avatarRot));
         var avatarTop = new Vector3(0, 1, 0);
 
@@ -225,20 +239,20 @@ public sealed class Plugin : IDalamudPlugin {
         var cameraFront = new Vector3(cameraViewMatrix.M13, cameraViewMatrix.M23, cameraViewMatrix.M33);
         var cameraTop = camera->CameraBase.SceneCamera.Vector_1;
 
-        var contextId = Dalamud.ClientState.LocalPlayer.CurrentWorld.Id.ToString();
-        var boundByDuty = Dalamud.Condition[ConditionFlag.BoundByDuty]
-                          || Dalamud.Condition[ConditionFlag.BoundByDuty56]
-                          || Dalamud.Condition[ConditionFlag.BoundByDuty95];
+        var contextId = D.ClientState.LocalPlayer.CurrentWorld.Id.ToString();
+        var boundByDuty = D.Condition[ConditionFlag.BoundByDuty]
+                          || D.Condition[ConditionFlag.BoundByDuty56]
+                          || D.Condition[ConditionFlag.BoundByDuty95];
 
         if (boundByDuty) {
             contextId = "duty";
         }
 
-        var context = contextId + "-" + Dalamud.ClientState.TerritoryType;
+        var context = contextId + "-" + D.ClientState.TerritoryType;
         var contextBytes = new byte[256];
         var contextBytesWritten = Encoding.UTF8.GetBytes(context, contextBytes);
 
-        var cid = Dalamud.ClientState.LocalContentId.ToString("X8");
+        var cid = D.ClientState.LocalContentId.ToString("X8");
         var hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(cid));
         var identity = BitConverter.ToString(hash).Replace("-", "").ToLower();
         var identityBytes = new byte[256 * 4];

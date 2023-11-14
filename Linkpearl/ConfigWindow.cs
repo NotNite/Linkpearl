@@ -9,33 +9,45 @@ public class ConfigWindow : Window, IDisposable {
 
   private Config Config;
 
-  public ConfigWindow(Plugin plugin) : base(
-    "Linkpearl Config", 
-    ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse
-  ) {
-    this.Size = new Vector2(380, 220);
-    this.SizeCondition = ImGuiCond.Always;
+  private Action testRun;
 
-    this.Config = plugin.Config;
+  public ConfigWindow(Plugin plugin) : base(
+    "Linkpearl Config",
+    ImGuiWindowFlags.NoCollapse) {
+    Size = new Vector2(380, 220);
+    SizeCondition = ImGuiCond.Once;
+
+    Config = plugin.Config;
+    testRun = plugin.Start;
   }
 
   public void Dispose() { }
 
   public override void Draw() {
-    var linuxMode = this.Config.LinuxMode;
+    var linuxMode = Config.LinuxMode;
     ImGui.TextWrapped("If your Mumble client is running on Linux some of the data structures are different.  Please set this appropriately (leave unchecked if you are running Mumble in Windows)");
     if (ImGui.Checkbox("Linux Mode", ref linuxMode)) {
-      this.Config.LinuxMode = linuxMode;
-      this.Config.Save();
+      Config.LinuxMode = linuxMode;
+      Config.Save();
     }
     if (linuxMode) {
       ImGui.TextWrapped("What is the UID of the user Mumble is running under?");
-      var linuxUID = this.Config.LinuxUID;
+      var linuxUID = Config.LinuxUID;
       if (ImGui.InputInt("User ID", ref linuxUID)) {
-        this.Config.LinuxUID = linuxUID;
+        Config.LinuxUID = linuxUID;
+        Config.Save();
       }
     }
     ImGui.TextWrapped("After making a configuration change please disable and re-enable this plugin in order to retry the connection");
 
+    var rate = Config.RateMS;
+    if (ImGui.DragInt("Send Rate (ms)", ref rate, 1f, 15, 1000)) {
+      Config.RateMS = rate > 1000 ? 1000 : rate < 15 ? 15 : rate;
+      Config.Save();
+    }
+
+    if (ImGui.Button("Test")) {
+      testRun();
+    }
   }
 }
