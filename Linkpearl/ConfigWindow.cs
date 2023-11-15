@@ -10,22 +10,41 @@ public class ConfigWindow : Window, IDisposable {
   private Config Config;
 
   private Action testRun;
+  private Action applyChanges;
+
+  private readonly string linuxWarning = String.Join(' ',
+      "If your Mumble client is running on Linux some",
+      "of the communication methods are different.  Please",
+      "set this appropriately (leave unchecked if you are",
+      "running Mumble in Windows).");
+  private readonly string rateLimitWarning = String.Join(' ',
+      "Mumble only reads positional data every",
+      "20ms.  Sending data much faster than that is pointless.",
+      " You may, however, find the CPU and memory overhead savings",
+      "of slowing down the data rate to be helpful.",
+      " Especially consider this if you have",
+      "any crashing problems with this plugin.");
 
   public ConfigWindow(Plugin plugin) : base(
     "Linkpearl Config",
-    ImGuiWindowFlags.NoCollapse) {
-    Size = new Vector2(380, 220);
+    ImGuiWindowFlags.None // | ImGuiWindowFlags.AlwaysAutoResize
+    ) {
+    Size = new Vector2(475, 350);
     SizeCondition = ImGuiCond.Once;
 
     Config = plugin.Config;
-    testRun = plugin.Start;
+    testRun = plugin.DataTest;
+    applyChanges = () => {
+      plugin.DataStop();
+      plugin.DataStart();
+    };
   }
 
   public void Dispose() { }
 
   public override void Draw() {
     var linuxMode = Config.LinuxMode;
-    ImGui.TextWrapped("If your Mumble client is running on Linux some of the data structures are different.  Please set this appropriately (leave unchecked if you are running Mumble in Windows)");
+    ImGui.TextWrapped(linuxWarning);
     if (ImGui.Checkbox("Linux Mode", ref linuxMode)) {
       Config.LinuxMode = linuxMode;
       Config.Save();
@@ -38,16 +57,18 @@ public class ConfigWindow : Window, IDisposable {
         Config.Save();
       }
     }
-    ImGui.TextWrapped("After making a configuration change please disable and re-enable this plugin in order to retry the connection");
+    ImGui.Separator();
+    ImGui.TextWrapped(rateLimitWarning);
 
     var rate = Config.RateMS;
-    if (ImGui.DragInt("Send Rate (ms)", ref rate, 1f, 15, 1000)) {
-      Config.RateMS = rate > 1000 ? 1000 : rate < 15 ? 15 : rate;
+    ImGui.TextWrapped("Limit send rate to (in ms, higher is slower):");
+    if (ImGui.DragInt("", ref rate, 1f, 15, 1000, null, ImGuiSliderFlags.AlwaysClamp)) {
+      Config.RateMS = rate;
       Config.Save();
     }
 
-    if (ImGui.Button("Test")) {
-      testRun();
-    }
+    if (ImGui.Button("Apply Changes")) applyChanges();
+    ImGui.SameLine();
+    if (ImGui.Button("Test")) testRun();
   }
 }

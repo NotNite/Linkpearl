@@ -41,6 +41,8 @@ public sealed class Plugin : IDalamudPlugin {
     private uint _tickCount;
     private bool LinuxMode { get; init; }
 
+    private DataOperationLinux? dataOperation;
+
     public Plugin(DalamudPluginInterface pluginInterface) {
         D.Initialize(pluginInterface);
 
@@ -84,26 +86,42 @@ public sealed class Plugin : IDalamudPlugin {
         */
     }
 
-    public void Start() {
-        var test = new TestingArea(rateMS: Config.RateMS);
+    public void DataStart(bool paused = false) {
+        try {
+            dataOperation = new DataOperationLinux(Config.RateMS, Config.LinuxUID);
+            if (!paused) D.Framework.Update += dataOperation.RateLimitedUpdate;
+        } catch (Exception e) {
+            D.Log.Error(e, "Unable to create link to Mumble");
+            D.ChatGui.PrintError("[Linkpearl] Failed to create link to Mumble");
+        }
+    }
 
-        D.Framework.Update += test.FrameworkUpdate;
+    public void DataTest() {
+        DataStop();
+        DataStart(paused: true);
+
+        if (dataOperation is null) return;
+        D.Framework.Update += dataOperation.RateLimitedUpdate;
 
         Task.Factory.StartNew(() => {
             System.Threading.Thread.Sleep(1000);
-            D.Framework.Update -= test.FrameworkUpdate;
+            D.Framework.Update -= dataOperation.RateLimitedUpdate;
         });
+    }
+
+    public void DataStop() {
+        if (dataOperation is null) return;
+
+        D.Framework.Update -= dataOperation.RateLimitedUpdate;
+        dataOperation.Dispose();
+        dataOperation = null;
     }
 
     private void DrawUI() { this.WindowSystem.Draw(); }
     private void DrawConfigUI() { this.ConfigWindow.IsOpen = true; }
 
     public void Dispose() {
-        if (this.LinuxMode) {
-            D.Framework.Update -= this.FrameworkUpdateLinux;
-        } else {
-            D.Framework.Update -= this.FrameworkUpdateWindows;
-        }
+        DataStop();
 
         this.WindowSystem.RemoveAllWindows();
         this.ConfigWindow.Dispose();
@@ -219,126 +237,5 @@ public sealed class Plugin : IDalamudPlugin {
                 cameraTop.Z
             }
         };
-    }
-
-    private unsafe MumbleAvatarLinux? BuildAvatarLinux() {
-        if (D.ClientState.LocalPlayer == null) return null;
-        if (this._memoryMappedFile == null) return null;
-        if (this._memoryMappedViewAccessor == null) return null;
-
-        var avatarPos = D.ClientState.LocalPlayer.Position;
-        var avatarRot = D.ClientState.LocalPlayer.Rotation; // -pi to pi radians
-        var avatarFront = new Vector3((float)Math.Cos(avatarRot), 0, (float)Math.Sin(avatarRot));
-        var avatarTop = new Vector3(0, 1, 0);
-
-        var camera = CameraManager.Instance()->GetActiveCamera();
-        if (camera == null) return null;
-
-        var cameraPos = camera->CameraBase.SceneCamera.Object.Position;
-        var cameraViewMatrix = camera->CameraBase.SceneCamera.ViewMatrix;
-        var cameraFront = new Vector3(cameraViewMatrix.M13, cameraViewMatrix.M23, cameraViewMatrix.M33);
-        var cameraTop = camera->CameraBase.SceneCamera.Vector_1;
-
-        var contextId = D.ClientState.LocalPlayer.CurrentWorld.Id.ToString();
-        var boundByDuty = D.Condition[ConditionFlag.BoundByDuty]
-                          || D.Condition[ConditionFlag.BoundByDuty56]
-                          || D.Condition[ConditionFlag.BoundByDuty95];
-
-        if (boundByDuty) {
-            contextId = "duty";
-        }
-
-        var context = contextId + "-" + D.ClientState.TerritoryType;
-        var contextBytes = new byte[256];
-        var contextBytesWritten = Encoding.UTF8.GetBytes(context, contextBytes);
-
-        var cid = D.ClientState.LocalContentId.ToString("X8");
-        var hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(cid));
-        var identity = BitConverter.ToString(hash).Replace("-", "").ToLower();
-        var identityBytes = new byte[256 * 4];
-        Encoding.UTF32.GetBytes(identity, identityBytes);
-
-        var name = new byte[256 * 4];
-        Encoding.UTF32.GetBytes("Linkpearl", name);
-        var description = new byte[2048 * 4];
-        Encoding.UTF32.GetBytes("An actually updated Mumble positional audio plugin", description);
-
-        return new MumbleAvatarLinux {
-            UIVersion = 2,
-            UITick = this._tickCount,
-
-            Name = name,
-            Description = description,
-
-            Identity = identityBytes,
-            Context = contextBytes,
-            ContextLength = (uint)contextBytesWritten,
-
-            AvatarPosition = new[] {
-                avatarPos.X,
-                avatarPos.Y,
-                avatarPos.Z
-            },
-
-            AvatarFront = new[] {
-                avatarFront.X,
-                avatarFront.Y,
-                avatarFront.Z
-            },
-
-            AvatarTop = new[] {
-                avatarTop.X,
-                avatarTop.Y,
-                avatarTop.Z
-            },
-
-            CameraPosition = new[] {
-                cameraPos.X,
-                cameraPos.Y,
-                cameraPos.Z
-            },
-
-            CameraFront = new[] {
-                cameraFront.X,
-                cameraFront.Y,
-                cameraFront.Z
-            },
-
-            CameraTop = new[] {
-                cameraTop.X,
-                cameraTop.Y,
-                cameraTop.Z
-            }
-        };
-    }
-
-    private void FrameworkUpdate<T>(Func<T> action) {
-        if (this._memoryMappedViewAccessor == null) return;
-
-        var mumbleAvatar = action();
-        if (mumbleAvatar == null) return;
-
-        var size = Marshal.SizeOf<MumbleAvatarWindows>();
-        var buffer = new byte[size];
-
-        var ptr = IntPtr.Zero;
-        try {
-            ptr = Marshal.AllocHGlobal(size);
-            Marshal.StructureToPtr(mumbleAvatar, ptr, true);
-            Marshal.Copy(ptr, buffer, 0, size);
-
-            this._memoryMappedViewAccessor.WriteArray(0, buffer, 0, size);
-        } finally {
-            Marshal.FreeHGlobal(ptr);
-        }
-
-        this._tickCount += 1;
-    }
-
-    private void FrameworkUpdateWindows(IFramework onGodFr) {
-        this.FrameworkUpdate(this.BuildAvatarWindows);
-    }
-    private void FrameworkUpdateLinux(IFramework onGodFr) {
-        this.FrameworkUpdate(this.BuildAvatarLinux);
     }
 }

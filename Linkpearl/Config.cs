@@ -9,7 +9,7 @@ namespace Linkpearl {
 
     public bool LinuxMode { get; set; } = false;
     public int LinuxUID { get; set; } = 1000;
-    public int RateMS { get; set; } = 20;
+    public int RateMS { get; set; } = 55;
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]

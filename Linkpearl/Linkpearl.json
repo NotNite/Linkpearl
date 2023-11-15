@@ -2,7 +2,7 @@
   "Author": "NotNite, lostkagamine, guyven",
   "Name": "Linkpearl",
   "Punchline": "An actually updated Mumble positional audio plugin",
-  "Description": "An actually updated Mumble positional audio plugin. Because people still use Mumble... right?\nEnable \"Link to Game and Transmit Position\" and the Link plugin in your Mumble settings.\nDo NOT enable the Final Fantasy XIV plugin - it's unrelated to Linkpearl.\nMake sure Mumble is open when the plugin loads, or you'll have to re-enable it.",
+  "Description": "An actually updated Mumble positional audio plugin. Because people still use Mumble... right?\nEnable \"Link to Game and Transmit Position\" and the Link plugin in your Mumble settings.\nDo NOT enable the Final Fantasy XIV plugin - it's unrelated to Linkpearl.\nMake sure Mumble is open when the plugin loads, or you'll have to re-enable it.\nIf you are running Mumble on Linux some additional configuration is necessary (click Settings).",
   "InternalName": "Linkpearl",
   "ApplicableVersion": "any",
   "Tags": [
