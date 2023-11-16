@@ -30,7 +30,7 @@ public class ConfigWindow : Window, IDisposable {
       "Linkpearl Config",
       ImGuiWindowFlags.None // | ImGuiWindowFlags.AlwaysAutoResize
       ) {
-        Size = new Vector2(475, 350);
+        Size = new Vector2(470, 350);
         SizeCondition = ImGuiCond.Once;
 
         Config = plugin.Config;
@@ -69,9 +69,10 @@ public class ConfigWindow : Window, IDisposable {
             Config.Save();
         }
 
+        ImGui.Separator();
         if (ImGui.Button("Apply Changes")) applyChanges();
-        ImGui.SameLine();
-        if (ImGui.Button("Test")) testRun();
+        // ImGui.SameLine();
+        // if (ImGui.Button("Test")) testRun();
         ImGui.SameLine();
         if (ImGui.Button("Log Data")) showLogInfo();
     }

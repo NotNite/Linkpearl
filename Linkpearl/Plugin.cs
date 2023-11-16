@@ -1,18 +1,10 @@
 ﻿using System;
 using System.IO.MemoryMappedFiles;
-using System.Numerics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading.Tasks;
-using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Game.Command;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Client.Game.Control;
 
 namespace Linkpearl;
 
@@ -39,9 +31,8 @@ public sealed class Plugin : IDalamudPlugin {
     private readonly MemoryMappedFile? _memoryMappedFile;
     private readonly MemoryMappedViewAccessor? _memoryMappedViewAccessor;
     private uint _tickCount;
-    private bool LinuxMode { get; init; }
 
-    private DataOperationLinux? dataOperation;
+    private DataOperation? dataOperation;
 
     public Plugin(DalamudPluginInterface pluginInterface) {
         D.Initialize(pluginInterface);
@@ -49,7 +40,6 @@ public sealed class Plugin : IDalamudPlugin {
         this.Config = pluginInterface.GetPluginConfig() as Config ?? new Config();
         this.Config.Initialize(pluginInterface);
         this.ConfigWindow = new ConfigWindow(this);
-        this.LinuxMode = this.Config.LinuxMode;
 
         this.WindowSystem.AddWindow(this.ConfigWindow);
         pluginInterface.UiBuilder.Draw += this.DrawUI;
@@ -57,38 +47,17 @@ public sealed class Plugin : IDalamudPlugin {
 
         this.ConfigWindow.IsOpen = true;
 
-        /*
-        if (this.LinuxMode) {
-            LP_Dalamud.Framework.Update += this.FrameworkUpdateLinux;
-        } else {
-            LP_Dalamud.Framework.Update += this.FrameworkUpdateWindows;
-        }
-
-        LP_Dalamud.CommandManager.AddHandler(CommandName, new CommandInfo(this.CommandHandler) {
-            HelpMessage = "Debug command for Linkpearl.",
-            ShowInHelp = false
-        });
-
-        LP_Dalamud.ChatGui.Print("LinkPearl Reloaded");
-
-        try {
-            if (this.LinuxMode) {
-                this._memoryMappedFile = MemoryMappedFile.CreateFromFile("/dev/shm/MumbleLink." + this.Config.LinuxUID, System.IO.FileMode.OpenOrCreate, null, Marshal.SizeOf<MumbleAvatarLinux>());
-            } else {
-                this._memoryMappedFile = MemoryMappedFile.CreateOrOpen("MumbleLink", Marshal.SizeOf<MumbleAvatarWindows>());
-            }
-            this._memoryMappedViewAccessor = this._memoryMappedFile.CreateViewAccessor();
-        } catch (Exception e) {
-            LP_Dalamud.PluginLog.Error(e, "Failed to create memory mapped file");
-            LP_Dalamud.ChatGui.PrintError(
-                "[Linkpearl] Failed to connect to Mumble. Make sure Mumble is open and re-enable the plugin!");
-        }
-        */
+        DataStart();
+        // LP_Dalamud.ChatGui.Print("LinkPearl Reloaded");
     }
 
     public void DataStart(bool paused = false) {
         try {
-            dataOperation = new DataOperationLinux(Config.RateMS, Config.LinuxUID);
+            if (Config.LinuxMode) {
+                dataOperation = new DataOperationLinux(Config.RateMS, Config.LinuxUID);
+            } else {
+                dataOperation = new DataOperationWindows(Config.RateMS);
+            }
             if (!paused) D.Framework.Update += dataOperation.RateLimitedUpdate;
         } catch (Exception e) {
             D.Log.Error(e, "Unable to create link to Mumble");
@@ -133,109 +102,34 @@ public sealed class Plugin : IDalamudPlugin {
     }
 
     public void ShowInformationInLog() {
-        var mumbleAvatar = dataOperation?.outputData;
-        D.Log.Debug($"Avatar exists: {mumbleAvatar != null}");
-        if (mumbleAvatar == null) return;
+        if (dataOperation == null){
+            D.Log.Debug($"Avatar does not exist");
+            return;
+        } 
 
-        var avatarPos = mumbleAvatar.Value.AvatarPosition;
-        D.Log.Debug($"Avatar position: {avatarPos[0]}, {avatarPos[1]}, {avatarPos[2]}");
-        var avatarFront = mumbleAvatar.Value.AvatarFront;
-        D.Log.Debug($"Avatar front: {avatarFront[0]}, {avatarFront[1]}, {avatarFront[2]}");
-        var avatarTop = mumbleAvatar.Value.AvatarTop;
-        D.Log.Debug($"Avatar top: {avatarTop[0]}, {avatarTop[1]}, {avatarTop[2]}");
-
-        var cameraPos = mumbleAvatar.Value.CameraPosition;
-        D.Log.Debug($"Camera position: {cameraPos[0]}, {cameraPos[1]}, {cameraPos[2]}");
-        var cameraFront = mumbleAvatar.Value.CameraFront;
-        D.Log.Debug($"Camera front: {cameraFront[0]}, {cameraFront[1]}, {cameraFront[2]}");
-        var cameraTop = mumbleAvatar.Value.CameraTop;
-        D.Log.Debug($"Camera top: {cameraTop[0]}, {cameraTop[1]}, {cameraTop[2]}");
-
-        var context = mumbleAvatar.Value.Context;
-        D.Log.Debug($"Context: {Encoding.UTF8.GetString(context)}");
-    }
-
-    private unsafe MumbleAvatarWindows? BuildAvatarWindows() {
-        if (D.ClientState.LocalPlayer == null) return null;
-        if (this._memoryMappedFile == null) return null;
-        if (this._memoryMappedViewAccessor == null) return null;
-
-        var avatarPos = D.ClientState.LocalPlayer.Position;
-        var avatarRot = D.ClientState.LocalPlayer.Rotation; // -pi to pi radians
-        var avatarFront = new Vector3((float)Math.Cos(avatarRot), 0, (float)Math.Sin(avatarRot));
-        var avatarTop = new Vector3(0, 1, 0);
-
-        var camera = CameraManager.Instance()->GetActiveCamera();
-        if (camera == null) return null;
-
-        var cameraPos = camera->CameraBase.SceneCamera.Object.Position;
-        var cameraViewMatrix = camera->CameraBase.SceneCamera.ViewMatrix;
-        var cameraFront = new Vector3(cameraViewMatrix.M13, cameraViewMatrix.M23, cameraViewMatrix.M33);
-        var cameraTop = camera->CameraBase.SceneCamera.Vector_1;
-
-        var contextId = D.ClientState.LocalPlayer.CurrentWorld.Id.ToString();
-        var boundByDuty = D.Condition[ConditionFlag.BoundByDuty]
-                          || D.Condition[ConditionFlag.BoundByDuty56]
-                          || D.Condition[ConditionFlag.BoundByDuty95];
-
-        if (boundByDuty) {
-            contextId = "duty";
+        dynamic mumbleAvatar = new { };
+        if (dataOperation.GetType() == typeof(DataOperationLinux)) {
+            mumbleAvatar = ((DataOperationLinux)dataOperation).outputData;
+        } else if (dataOperation?.GetType() == typeof(DataOperationWindows)) {
+            mumbleAvatar = ((DataOperationWindows)dataOperation).outputData;
         }
 
-        var context = contextId + "-" + D.ClientState.TerritoryType;
-        var contextBytes = new byte[256];
-        var contextBytesWritten = Encoding.UTF8.GetBytes(context, contextBytes);
+        var avatarPos = mumbleAvatar.AvatarPosition;
+        D.Log.Debug($"Avatar position: {avatarPos[0]}, {avatarPos[1]}, {avatarPos[2]}");
+        var avatarFront = mumbleAvatar.AvatarFront;
+        D.Log.Debug($"Avatar front: {avatarFront[0]}, {avatarFront[1]}, {avatarFront[2]}");
+        var avatarTop = mumbleAvatar.AvatarTop;
+        D.Log.Debug($"Avatar top: {avatarTop[0]}, {avatarTop[1]}, {avatarTop[2]}");
 
-        var cid = D.ClientState.LocalContentId.ToString("X8");
-        var hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(cid));
-        var identity = BitConverter.ToString(hash).Replace("-", "").ToLower();
+        var cameraPos = mumbleAvatar.CameraPosition;
+        D.Log.Debug($"Camera position: {cameraPos[0]}, {cameraPos[1]}, {cameraPos[2]}");
+        var cameraFront = mumbleAvatar.CameraFront;
+        D.Log.Debug($"Camera front: {cameraFront[0]}, {cameraFront[1]}, {cameraFront[2]}");
+        var cameraTop = mumbleAvatar.CameraTop;
+        D.Log.Debug($"Camera top: {cameraTop[0]}, {cameraTop[1]}, {cameraTop[2]}");
 
-        return new MumbleAvatarWindows {
-            UIVersion = 2,
-            UITick = this._tickCount,
-
-            Name = "Linkpearl",
-            Description = "An actually updated Mumble positional audio plugin",
-
-            Identity = identity,
-            Context = contextBytes,
-            ContextLength = (uint)contextBytesWritten,
-
-            AvatarPosition = new[] {
-                avatarPos.X,
-                avatarPos.Y,
-                avatarPos.Z
-            },
-
-            AvatarFront = new[] {
-                avatarFront.X,
-                avatarFront.Y,
-                avatarFront.Z
-            },
-
-            AvatarTop = new[] {
-                avatarTop.X,
-                avatarTop.Y,
-                avatarTop.Z
-            },
-
-            CameraPosition = new[] {
-                cameraPos.X,
-                cameraPos.Y,
-                cameraPos.Z
-            },
-
-            CameraFront = new[] {
-                cameraFront.X,
-                cameraFront.Y,
-                cameraFront.Z
-            },
-
-            CameraTop = new[] {
-                cameraTop.X,
-                cameraTop.Y,
-                cameraTop.Z
-            }
-        };
+        var context = mumbleAvatar.Context;
+        D.Log.Debug($"Context: {System.Text.Encoding.UTF8.GetString(context)}");
     }
+
 }

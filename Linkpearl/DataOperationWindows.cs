@@ -1,0 +1,143 @@
+using System;
+using System.IO.MemoryMappedFiles;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using Dalamud.Game.ClientState.Conditions;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using FFXIVClientStructs.FFXIV.Common.Math;
+
+namespace Linkpearl;
+
+public class DataOperationWindows : DataOperation {
+
+    private readonly MemoryMappedFile? memoryMappedFile;
+    private readonly MemoryMappedViewAccessor? memoryMappedViewAccessor;
+
+    public MumbleAvatarWindows outputData;
+
+    private int fileWriteBufferSize = Marshal.SizeOf<MumbleAvatarWindows>();
+    private byte[] fileWriteBuffer;
+    private nint writeStructPtr = IntPtr.Zero;
+
+    public DataOperationWindows(int rateMS) : base(rateMS) {
+        var cid = D.ClientState.LocalContentId.ToString("X8");
+        var hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(cid));
+        var identity = BitConverter.ToString(hash).Replace("-", "").ToLower();
+
+        outputData = new MumbleAvatarWindows {
+            UIVersion = 2,
+            Name = "Linkpearl",
+            Description = "An actually updated Mumble positional audio plugin",
+            Identity = identity,
+
+            AvatarTop = new[] { 0f, 1f, 0f },
+            AvatarFront = new[] { 0f, 0f, 0f },
+            AvatarPosition = new[] { 0f, 0f, 0f },
+
+            CameraTop = new[] { 0f, 0f, 0f },
+            CameraFront = new[] { 0f, 0f, 0f },
+            CameraPosition = new[] { 0f, 0f, 0f },
+
+            Context = new byte[256]
+        };
+
+
+        fileWriteBuffer = new byte[fileWriteBufferSize];
+        try {
+            writeStructPtr = Marshal.AllocHGlobal(fileWriteBufferSize);
+        } catch (OutOfMemoryException) {
+            writeStructPtr = IntPtr.Zero;
+        }
+
+        memoryMappedFile = MemoryMappedFile.CreateOrOpen("MumbleLink", Marshal.SizeOf<MumbleAvatarWindows>());
+        memoryMappedViewAccessor = memoryMappedFile.CreateViewAccessor();
+
+    }
+
+    public override void Dispose() {
+        Marshal.FreeHGlobal(writeStructPtr);
+        memoryMappedViewAccessor?.Dispose();
+        memoryMappedFile?.Dispose();
+    }
+
+    protected override void performUpdate() {
+        // D.Log.Debug($"{updateTick} : work work");
+
+        if (memoryMappedFile == null
+         || memoryMappedViewAccessor == null
+         || fileWriteBuffer == null
+         || writeStructPtr == IntPtr.Zero
+         || !refreshOuputData()) {
+            // D.Log.Debug($"memoryMappedFile: {memoryMappedFile}");
+            // D.Log.Debug($"memoryMappedViewAccessor: {memoryMappedViewAccessor}");
+            // D.Log.Debug($"fileWriteBuffer: {fileWriteBuffer?.Length}");
+            // D.Log.Debug($"writeStructPtr: {writeStructPtr}");
+            return;
+        }
+
+        // D.Log.Debug("continue to work work");
+
+        Marshal.StructureToPtr(outputData, writeStructPtr, true);
+        Marshal.Copy(writeStructPtr, fileWriteBuffer, 0, fileWriteBufferSize);
+        memoryMappedViewAccessor.WriteArray(0, fileWriteBuffer, 0, fileWriteBufferSize);
+
+    }
+
+    private bool refreshOuputData() {
+        if (D.ClientState.LocalPlayer == null) {
+            // D.Log.Debug("!! No Local Player");
+            return false;
+        }
+
+        Vector3 cameraPos;
+        Matrix4x4 cameraViewMatrix;
+        Vector3 cameraTop;
+        unsafe {
+            var camera = CameraManager.Instance()->GetActiveCamera();
+            if (camera == null) {
+                // D.Log.Debug("!! No Camera Available");
+                return false;
+            }
+
+            cameraPos = camera->CameraBase.SceneCamera.Object.Position;
+            cameraViewMatrix = camera->CameraBase.SceneCamera.ViewMatrix;
+            cameraTop = camera->CameraBase.SceneCamera.Vector_1;
+        }
+
+        outputData.UITick = updateTick;
+
+        outputData.CameraPosition[0] = cameraPos.X;
+        outputData.CameraPosition[1] = cameraPos.Y;
+        outputData.CameraPosition[2] = cameraPos.Z;
+
+        outputData.CameraFront[0] = cameraViewMatrix.M13;
+        outputData.CameraFront[1] = cameraViewMatrix.M23;
+        outputData.CameraFront[2] = cameraViewMatrix.M33;
+
+        outputData.CameraTop[0] = cameraTop.X;
+        outputData.CameraTop[1] = cameraTop.Y;
+        outputData.CameraTop[2] = cameraTop.Z;
+
+        var boundByDuty = D.Condition[ConditionFlag.BoundByDuty]
+                       || D.Condition[ConditionFlag.BoundByDuty56]
+                       || D.Condition[ConditionFlag.BoundByDuty95];
+        var contextId = boundByDuty ? "duty" : D.ClientState.LocalPlayer.CurrentWorld.Id.ToString();
+        var context = contextId + "-" + D.ClientState.TerritoryType;
+
+        var contextBytesWritten = Encoding.UTF8.GetBytes(context, outputData.Context);
+        outputData.ContextLength = (uint)contextBytesWritten;
+
+        var avatarPos = D.ClientState.LocalPlayer.Position;
+        outputData.AvatarPosition[0] = avatarPos.X;
+        outputData.AvatarPosition[1] = avatarPos.Y;
+        outputData.AvatarPosition[2] = avatarPos.Z;
+
+        var avatarRot = D.ClientState.LocalPlayer.Rotation; // -pi to pi radians
+        outputData.AvatarFront[0] = (float)Math.Cos(avatarRot);
+        //outputData.AvatarFront[1] = avatarFront.Y; // always 0
+        outputData.AvatarFront[2] = (float)Math.Sin(avatarRot);
+
+        return true;
+    }
+}
