@@ -45,7 +45,7 @@ public sealed class Plugin : IDalamudPlugin {
         pluginInterface.UiBuilder.Draw += this.DrawUI;
         pluginInterface.UiBuilder.OpenConfigUi += this.DrawConfigUI;
 
-        this.ConfigWindow.IsOpen = true;
+        //this.ConfigWindow.IsOpen = true;
 
         DataStart();
         // LP_Dalamud.ChatGui.Print("LinkPearl Reloaded");
