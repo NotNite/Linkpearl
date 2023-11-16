@@ -132,28 +132,28 @@ public sealed class Plugin : IDalamudPlugin {
         this._memoryMappedFile?.Dispose();
     }
 
-    // private void CommandHandler(string cmd, string args) {
-    //     var mumbleAvatar = this.BuildAvatarWindows();
-    //     D.Log.Debug($"Avatar exists: {mumbleAvatar != null}");
-    //     if (mumbleAvatar == null) return;
+    public void ShowInformationInLog() {
+        var mumbleAvatar = dataOperation?.outputData;
+        D.Log.Debug($"Avatar exists: {mumbleAvatar != null}");
+        if (mumbleAvatar == null) return;
 
-    //     var avatarPos = mumbleAvatar.Value.AvatarPosition;
-    //     D.Log.Debug($"Avatar position: {avatarPos[0]}, {avatarPos[1]}, {avatarPos[2]}");
-    //     var avatarFront = mumbleAvatar.Value.AvatarFront;
-    //     D.Log.Debug($"Avatar front: {avatarFront[0]}, {avatarFront[1]}, {avatarFront[2]}");
-    //     var avatarTop = mumbleAvatar.Value.AvatarTop;
-    //     D.Log.Debug($"Avatar top: {avatarTop[0]}, {avatarTop[1]}, {avatarTop[2]}");
+        var avatarPos = mumbleAvatar.Value.AvatarPosition;
+        D.Log.Debug($"Avatar position: {avatarPos[0]}, {avatarPos[1]}, {avatarPos[2]}");
+        var avatarFront = mumbleAvatar.Value.AvatarFront;
+        D.Log.Debug($"Avatar front: {avatarFront[0]}, {avatarFront[1]}, {avatarFront[2]}");
+        var avatarTop = mumbleAvatar.Value.AvatarTop;
+        D.Log.Debug($"Avatar top: {avatarTop[0]}, {avatarTop[1]}, {avatarTop[2]}");
 
-    //     var cameraPos = mumbleAvatar.Value.CameraPosition;
-    //     D.Log.Debug($"Camera position: {cameraPos[0]}, {cameraPos[1]}, {cameraPos[2]}");
-    //     var cameraFront = mumbleAvatar.Value.CameraFront;
-    //     D.Log.Debug($"Camera front: {cameraFront[0]}, {cameraFront[1]}, {cameraFront[2]}");
-    //     var cameraTop = mumbleAvatar.Value.CameraTop;
-    //     D.Log.Debug($"Camera top: {cameraTop[0]}, {cameraTop[1]}, {cameraTop[2]}");
+        var cameraPos = mumbleAvatar.Value.CameraPosition;
+        D.Log.Debug($"Camera position: {cameraPos[0]}, {cameraPos[1]}, {cameraPos[2]}");
+        var cameraFront = mumbleAvatar.Value.CameraFront;
+        D.Log.Debug($"Camera front: {cameraFront[0]}, {cameraFront[1]}, {cameraFront[2]}");
+        var cameraTop = mumbleAvatar.Value.CameraTop;
+        D.Log.Debug($"Camera top: {cameraTop[0]}, {cameraTop[1]}, {cameraTop[2]}");
 
-    //     var context = mumbleAvatar.Value.Context;
-    //     D.Log.Debug($"Context: {Encoding.UTF8.GetString(context)}");
-    // }
+        var context = mumbleAvatar.Value.Context;
+        D.Log.Debug($"Context: {Encoding.UTF8.GetString(context)}");
+    }
 
     private unsafe MumbleAvatarWindows? BuildAvatarWindows() {
         if (D.ClientState.LocalPlayer == null) return null;
