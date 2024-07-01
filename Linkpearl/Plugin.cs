@@ -1,135 +1,125 @@
 ﻿using System;
 using System.IO.MemoryMappedFiles;
+using System.Numerics;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Interface.Windowing;
-using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using Dalamud.Utility;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
 
 namespace Linkpearl;
 
-public class D {
-    public static void Initialize(DalamudPluginInterface pluginInterface) => pluginInterface.Create<D>();
-
-    [PluginService, RequiredVersion("1.0")] public static IFramework Framework { get; private set; } = null!;
-    [PluginService, RequiredVersion("1.0")] public static IClientState ClientState { get; private set; } = null!;
-    [PluginService, RequiredVersion("1.0")] public static IChatGui ChatGui { get; private set; } = null!;
-    [PluginService, RequiredVersion("1.0")] public static ICommandManager CommandManager { get; private set; } = null!;
-    [PluginService, RequiredVersion("1.0")] public static ICondition Condition { get; private set; } = null!;
-    [PluginService, RequiredVersion("1.0")] public static IPluginLog Log { get; private set; } = null!;
-}
-
 public sealed class Plugin : IDalamudPlugin {
-    public string Name => "Linkpearl";
-    public const string CommandName = "/pearldebug";
-
+    public const string MumbleName = "Linkpearl";
+    public const string MumbleDescription = "An actually updated Mumble positional audio plugin";
+    public const int MumbleVersion = 2;
 
     public WindowSystem WindowSystem = new("Linkpearl");
     public Config Config { get; init; }
     public ConfigWindow ConfigWindow { get; init; }
 
-    private readonly MemoryMappedFile? _memoryMappedFile;
-    private readonly MemoryMappedViewAccessor? _memoryMappedViewAccessor;
-    private uint _tickCount;
+    private uint tickCount;
+    private IMumbleConnection? connection;
+    private DateTime lastSend = DateTime.MinValue;
 
-    private DataOperation? dataOperation;
+    public Plugin(IDalamudPluginInterface pluginInterface) {
+        pluginInterface.Create<Services>();
 
-    public Plugin(DalamudPluginInterface pluginInterface) {
-        D.Initialize(pluginInterface);
-
-        this.Config = pluginInterface.GetPluginConfig() as Config ?? new Config();
-        this.Config.Initialize(pluginInterface);
+        this.Config = Services.DalamudPluginInterface.GetPluginConfig() as Config ?? new Config();
         this.ConfigWindow = new ConfigWindow(this);
 
         this.WindowSystem.AddWindow(this.ConfigWindow);
-        pluginInterface.UiBuilder.Draw += this.DrawUI;
-        pluginInterface.UiBuilder.OpenConfigUi += this.DrawConfigUI;
+        Services.DalamudPluginInterface.UiBuilder.Draw += this.DrawUi;
+        Services.DalamudPluginInterface.UiBuilder.OpenConfigUi += this.DrawConfigUi;
 
-        //this.ConfigWindow.IsOpen = true;
+        Services.Framework.Update += this.Update;
+        Services.ClientState.Login += this.Start;
+        Services.ClientState.Logout += this.Stop;
+        if (Services.ClientState.IsLoggedIn) this.Start();
 
-        DataStart();
-        // LP_Dalamud.ChatGui.Print("LinkPearl Reloaded");
+        this.Start();
     }
 
-    public void DataStart(bool paused = false) {
-        try {
-            if (Config.LinuxMode) {
-                dataOperation = new DataOperationLinux(Config.RateMS, Config.LinuxUID);
-            } else {
-                dataOperation = new DataOperationWindows(Config.RateMS);
-            }
-            if (!paused) D.Framework.Update += dataOperation.RateLimitedUpdate;
-        } catch (Exception e) {
-            D.Log.Error(e, "Unable to create link to Mumble");
-            D.ChatGui.PrintError("[Linkpearl] Failed to create link to Mumble");
+    private unsafe void Update(IFramework framework) {
+        if (this.connection == null || Services.ClientState.LocalPlayer == null) return;
+        if (framework.LastUpdate > this.lastSend.AddMilliseconds(this.Config.RateMs)) {
+            this.lastSend = framework.LastUpdate;
+            this.tickCount++;
+
+            var manager = CameraManager.Instance();
+            if (manager == null) return;
+            var camera = manager->GetActiveCamera();
+            if (camera == null) return;
+            var cameraPos = camera->CameraBase.SceneCamera.Object.Position;
+            var cameraViewMatrix = camera->CameraBase.SceneCamera.ViewMatrix;
+            var cameraTop = camera->CameraBase.SceneCamera.Vector_1;
+
+            var boundByDuty = Services.Condition[ConditionFlag.BoundByDuty]
+                              || Services.Condition[ConditionFlag.BoundByDuty56]
+                              || Services.Condition[ConditionFlag.BoundByDuty95];
+            var contextId = boundByDuty ? "duty" : Services.ClientState.LocalPlayer.CurrentWorld.Id.ToString();
+            var context = contextId + "-" + Services.ClientState.TerritoryType;
+
+            var avatar = new MumbleAvatar {
+                UiTick = this.tickCount,
+                Context = context,
+
+                AvatarPosition = Services.ClientState.LocalPlayer.Position,
+                AvatarFront = Vector3.Zero,
+                AvatarTop = new Vector3(0, 1, 0),
+
+                CameraPosition = cameraPos,
+                CameraFront = new Vector3(cameraViewMatrix.M13, cameraViewMatrix.M23, cameraViewMatrix.M33),
+                CameraTop = cameraTop
+            };
+
+            // -pi to pi radians
+            var avatarRot = Services.ClientState.LocalPlayer.Rotation;
+            avatar.AvatarFront.X = (float) Math.Cos(avatarRot);
+            avatar.AvatarFront.Z = (float) Math.Sin(avatarRot);
+
+            this.connection.Update(avatar);
         }
     }
 
-    public void DataTest() {
-        DataStop();
-        DataStart(paused: true);
+    public void Start() {
+        var cid = Services.ClientState.LocalContentId.ToString("X8");
+        var hash = SHA256.Create().ComputeHash(Encoding.UTF8.GetBytes(cid));
+        var identity = BitConverter.ToString(hash).Replace("-", "").ToLower();
 
-        if (dataOperation is null) return;
-        D.Framework.Update += dataOperation.RateLimitedUpdate;
-
-        Task.Factory.StartNew(() => {
-            System.Threading.Thread.Sleep(1000);
-            D.Framework.Update -= dataOperation.RateLimitedUpdate;
-        });
+        this.connection = Util.IsWine()
+                              ? new LinuxMumbleConnection(identity, this.Config.LinuxUid)
+                              : new WindowsMumbleConnection(identity);
     }
 
-    public void DataStop() {
-        if (dataOperation is null) return;
-
-        D.Framework.Update -= dataOperation.RateLimitedUpdate;
-        dataOperation.Dispose();
-        dataOperation = null;
+    public void Stop() {
+        this.connection?.Dispose();
+        this.connection = null;
     }
 
-    private void DrawUI() { this.WindowSystem.Draw(); }
-    private void DrawConfigUI() { this.ConfigWindow.IsOpen = true; }
+    private void DrawUi() {
+        this.WindowSystem.Draw();
+    }
+
+    private void DrawConfigUi() {
+        this.ConfigWindow.IsOpen = true;
+    }
 
     public void Dispose() {
-        DataStop();
+        Services.DalamudPluginInterface.UiBuilder.Draw -= this.DrawUi;
+        Services.DalamudPluginInterface.UiBuilder.OpenConfigUi -= this.DrawConfigUi;
+
+        Services.Framework.Update -= this.Update;
+        Services.ClientState.Login -= this.Start;
+        Services.ClientState.Logout -= this.Stop;
 
         this.WindowSystem.RemoveAllWindows();
-        this.ConfigWindow.Dispose();
+        this.Config.Save();
 
-        // D.CommandManager.RemoveHandler(CommandName);
-
-        this._memoryMappedViewAccessor?.Dispose();
-        this._memoryMappedFile?.Dispose();
+        this.connection?.Dispose();
     }
-
-    public void ShowInformationInLog() {
-        if (dataOperation == null){
-            D.Log.Debug($"Avatar does not exist");
-            return;
-        } 
-
-        dynamic mumbleAvatar = new { };
-        if (dataOperation.GetType() == typeof(DataOperationLinux)) {
-            mumbleAvatar = ((DataOperationLinux)dataOperation).outputData;
-        } else if (dataOperation?.GetType() == typeof(DataOperationWindows)) {
-            mumbleAvatar = ((DataOperationWindows)dataOperation).outputData;
-        }
-
-        var avatarPos = mumbleAvatar.AvatarPosition;
-        D.Log.Debug($"Avatar position: {avatarPos[0]}, {avatarPos[1]}, {avatarPos[2]}");
-        var avatarFront = mumbleAvatar.AvatarFront;
-        D.Log.Debug($"Avatar front: {avatarFront[0]}, {avatarFront[1]}, {avatarFront[2]}");
-        var avatarTop = mumbleAvatar.AvatarTop;
-        D.Log.Debug($"Avatar top: {avatarTop[0]}, {avatarTop[1]}, {avatarTop[2]}");
-
-        var cameraPos = mumbleAvatar.CameraPosition;
-        D.Log.Debug($"Camera position: {cameraPos[0]}, {cameraPos[1]}, {cameraPos[2]}");
-        var cameraFront = mumbleAvatar.CameraFront;
-        D.Log.Debug($"Camera front: {cameraFront[0]}, {cameraFront[1]}, {cameraFront[2]}");
-        var cameraTop = mumbleAvatar.CameraTop;
-        D.Log.Debug($"Camera top: {cameraTop[0]}, {cameraTop[1]}, {cameraTop[2]}");
-
-        var context = mumbleAvatar.Context;
-        D.Log.Debug($"Context: {System.Text.Encoding.UTF8.GetString(context)}");
-    }
-
 }

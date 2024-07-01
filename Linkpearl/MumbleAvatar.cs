@@ -1,11 +1,25 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace Linkpearl;
 
+public record MumbleAvatar {
+    public uint UiTick;
+    public required string Context;
+
+    public Vector3 AvatarPosition;
+    public Vector3 AvatarFront;
+    public Vector3 AvatarTop;
+
+    public Vector3 CameraPosition;
+    public Vector3 CameraFront;
+    public Vector3 CameraTop;
+}
+
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
 public struct MumbleAvatarWindows {
-    public uint UIVersion;
-    public uint UITick;
+    public uint UiVersion;
+    public uint UiTick;
 
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
     public float[] AvatarPosition;
@@ -42,8 +56,8 @@ public struct MumbleAvatarWindows {
 
 [StructLayout(LayoutKind.Sequential)]
 public struct MumbleAvatarLinux {
-    public uint UIVersion;
-    public uint UITick;
+    public uint UiVersion;
+    public uint UiTick;
 
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
     public float[] AvatarPosition;
@@ -54,7 +68,7 @@ public struct MumbleAvatarLinux {
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
     public float[] AvatarTop;
 
-    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256*4)]
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256 * 4)]
     public byte[] Name;
 
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
@@ -66,7 +80,7 @@ public struct MumbleAvatarLinux {
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
     public float[] CameraTop;
 
-    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256*4)]
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256 * 4)]
     public byte[] Identity;
 
     public uint ContextLength;
@@ -74,6 +88,6 @@ public struct MumbleAvatarLinux {
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = 256)]
     public byte[] Context;
 
-    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 2048*4)]
+    [MarshalAs(UnmanagedType.ByValArray, SizeConst = 2048 * 4)]
     public byte[] Description;
 }

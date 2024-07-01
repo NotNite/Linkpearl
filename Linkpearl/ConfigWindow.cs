@@ -1,24 +1,12 @@
 using System;
-using System.Numerics;
-using Dalamud.Interface.Internal.Windows.Settings.Widgets;
 using Dalamud.Interface.Windowing;
+using Dalamud.Utility;
 using ImGuiNET;
 
 namespace Linkpearl;
-public class ConfigWindow : Window, IDisposable {
 
-    private Config Config;
-
-    private Action testRun;
-    private Action applyChanges;
-    private Action showLogInfo;
-
-    private readonly string linuxWarning = String.Join(' ',
-        "If your Mumble client is running on Linux some",
-        "of the communication methods are different.  Please",
-        "set this appropriately (leave unchecked if you are",
-        "running Mumble in Windows).");
-    private readonly string rateLimitWarning = String.Join(' ',
+public class ConfigWindow(Plugin plugin) : Window("Linkpearl Config", ImGuiWindowFlags.AlwaysAutoResize) {
+    private readonly string rateLimitWarning = string.Join(' ',
         "Mumble only reads positional data every",
         "20ms.  Sending data much faster than that is pointless.",
         " You may, however, find the CPU and memory overhead savings",
@@ -26,54 +14,24 @@ public class ConfigWindow : Window, IDisposable {
         " Especially consider this if you have",
         "any crashing problems with this plugin.");
 
-    public ConfigWindow(Plugin plugin) : base(
-      "Linkpearl Config",
-      ImGuiWindowFlags.None // | ImGuiWindowFlags.AlwaysAutoResize
-      ) {
-        Size = new Vector2(470, 350);
-        SizeCondition = ImGuiCond.Once;
-
-        Config = plugin.Config;
-        testRun = plugin.DataTest;
-        applyChanges = () => {
-            plugin.DataStop();
-            plugin.DataStart();
-        };
-        showLogInfo = plugin.ShowInformationInLog;
-    }
-
-    public void Dispose() { }
-
     public override void Draw() {
-        var linuxMode = Config.LinuxMode;
-        ImGui.TextWrapped(linuxWarning);
-        if (ImGui.Checkbox("Linux Mode", ref linuxMode)) {
-            Config.LinuxMode = linuxMode;
-            Config.Save();
-        }
-        if (linuxMode) {
+        if (Util.IsWine()) {
             ImGui.TextWrapped("What is the UID of the user Mumble is running under?");
-            var linuxUID = Config.LinuxUID;
-            if (ImGui.InputInt("User ID", ref linuxUID)) {
-                Config.LinuxUID = linuxUID;
-                Config.Save();
+            var linuxUid = plugin.Config.LinuxUid;
+            if (ImGui.InputInt("User ID", ref linuxUid)) {
+                plugin.Config.LinuxUid = linuxUid;
+                plugin.Config.Save();
             }
         }
+
         ImGui.Separator();
         ImGui.TextWrapped(rateLimitWarning);
 
-        var rate = Config.RateMS;
+        var rate = plugin.Config.RateMs;
         ImGui.TextWrapped("Limit send rate to (in ms, higher is slower):");
         if (ImGui.DragInt("", ref rate, 1f, 15, 1000, null, ImGuiSliderFlags.AlwaysClamp)) {
-            Config.RateMS = rate;
-            Config.Save();
+            plugin.Config.RateMs = rate;
+            plugin.Config.Save();
         }
-
-        ImGui.Separator();
-        if (ImGui.Button("Apply Changes")) applyChanges();
-        // ImGui.SameLine();
-        // if (ImGui.Button("Test")) testRun();
-        ImGui.SameLine();
-        if (ImGui.Button("Log Data")) showLogInfo();
     }
 }
