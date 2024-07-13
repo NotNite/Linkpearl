@@ -31,8 +31,6 @@ public sealed class Plugin : IDalamudPlugin {
         Services.ClientState.Login += this.Start;
         Services.ClientState.Logout += this.Stop;
         if (Services.ClientState.IsLoggedIn) this.Start();
-
-        this.Start();
     }
 
     private unsafe void Update(IFramework framework) {
