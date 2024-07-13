@@ -1,11 +1,8 @@
 ﻿using System;
-using System.IO.MemoryMappedFiles;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
 using Dalamud.Game.ClientState.Conditions;
-using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
@@ -17,10 +14,9 @@ public sealed class Plugin : IDalamudPlugin {
     public const string MumbleName = "Linkpearl";
     public const string MumbleDescription = "An actually updated Mumble positional audio plugin";
     public const int MumbleVersion = 2;
+    public const int RateMs = 50;
 
-    public WindowSystem WindowSystem = new("Linkpearl");
-    public Config Config { get; init; }
-    public ConfigWindow ConfigWindow { get; init; }
+    public Config Config;
 
     private uint tickCount;
     private IMumbleConnection? connection;
@@ -30,11 +26,6 @@ public sealed class Plugin : IDalamudPlugin {
         pluginInterface.Create<Services>();
 
         this.Config = Services.DalamudPluginInterface.GetPluginConfig() as Config ?? new Config();
-        this.ConfigWindow = new ConfigWindow(this);
-
-        this.WindowSystem.AddWindow(this.ConfigWindow);
-        Services.DalamudPluginInterface.UiBuilder.Draw += this.DrawUi;
-        Services.DalamudPluginInterface.UiBuilder.OpenConfigUi += this.DrawConfigUi;
 
         Services.Framework.Update += this.Update;
         Services.ClientState.Login += this.Start;
@@ -46,7 +37,7 @@ public sealed class Plugin : IDalamudPlugin {
 
     private unsafe void Update(IFramework framework) {
         if (this.connection == null || Services.ClientState.LocalPlayer == null) return;
-        if (framework.LastUpdate > this.lastSend.AddMilliseconds(this.Config.RateMs)) {
+        if (framework.LastUpdate > this.lastSend.AddMilliseconds(RateMs)) {
             this.lastSend = framework.LastUpdate;
             this.tickCount++;
 
@@ -101,25 +92,12 @@ public sealed class Plugin : IDalamudPlugin {
         this.connection = null;
     }
 
-    private void DrawUi() {
-        this.WindowSystem.Draw();
-    }
-
-    private void DrawConfigUi() {
-        this.ConfigWindow.IsOpen = true;
-    }
-
     public void Dispose() {
-        Services.DalamudPluginInterface.UiBuilder.Draw -= this.DrawUi;
-        Services.DalamudPluginInterface.UiBuilder.OpenConfigUi -= this.DrawConfigUi;
-
         Services.Framework.Update -= this.Update;
         Services.ClientState.Login -= this.Start;
         Services.ClientState.Logout -= this.Stop;
 
-        this.WindowSystem.RemoveAllWindows();
         this.Config.Save();
-
         this.connection?.Dispose();
     }
 }
