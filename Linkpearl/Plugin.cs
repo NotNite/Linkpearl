@@ -50,7 +50,7 @@ public sealed class Plugin : IDalamudPlugin {
             var boundByDuty = Services.Condition[ConditionFlag.BoundByDuty]
                               || Services.Condition[ConditionFlag.BoundByDuty56]
                               || Services.Condition[ConditionFlag.BoundByDuty95];
-            var contextId = boundByDuty ? "duty" : Services.ClientState.LocalPlayer.CurrentWorld.Id.ToString();
+            var contextId = boundByDuty ? "duty" : Services.ClientState.LocalPlayer.CurrentWorld.RowId.ToString();
             var context = contextId + "-" + Services.ClientState.TerritoryType;
 
             var avatar = new MumbleAvatar {
@@ -85,7 +85,7 @@ public sealed class Plugin : IDalamudPlugin {
                               : new WindowsMumbleConnection(identity);
     }
 
-    public void Stop() {
+    public void Stop(int type, int code) {
         this.connection?.Dispose();
         this.connection = null;
     }
